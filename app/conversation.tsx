@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { addDoc, collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
 import {
     FlatList,
     KeyboardAvoidingView,
@@ -12,6 +13,7 @@ import {
     View,
 } from 'react-native';
 import { Colors } from '../constants/Colors';
+import { auth, db } from '../firebase/firebaseConfig';
 
 /* =======================
    TYPES
@@ -20,59 +22,86 @@ type Message = {
   id: string;
   text: string;
   sender: 'me' | 'other';
-  time: string;
+  createdAt: string; // On utilise createdAt pour le tri Firebase
 };
-
-/* =======================
-   MOCK DATA (TYPÉ)
-======================= */
-const MOCK_MESSAGES: Message[] = [
-  { id: '1', text: 'Hello! Is this item still available?', sender: 'me', time: '10:00 AM' },
-  { id: '2', text: 'Yes, it is! Are you interested?', sender: 'other', time: '10:05 AM' },
-  { id: '3', text: 'Can you deliver to Casablanca?', sender: 'me', time: '10:10 AM' },
-  { id: '4', text: 'Sure, delivery takes 2-3 days.', sender: 'other', time: '10:11 AM' },
-  { id: '5', text: 'Perfect, I will place the order now.', sender: 'me', time: '10:12 AM' },
-];
 
 export default function ConversationScreen() {
   const router = useRouter();
 
   /* =======================
-     PARAMS (SÉCURISÉS)
+     PARAMS
   ======================= */
-  const params = useLocalSearchParams<{ name?: string | string[] }>();
-
-  const contactName =
-    typeof params.name === 'string'
-      ? params.name
-      : Array.isArray(params.name)
-      ? params.name[0]
-      : 'Chat';
+  // On récupère aussi le chatId passé par l'écran précédent
+  const params = useLocalSearchParams<{ name?: string; chatId?: string }>();
+  
+  const contactName = params.name || 'Chat';
+  const chatId = params.chatId; // L'ID de la conversation dans Firebase
 
   /* =======================
      STATE
   ======================= */
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
+
+  /* =======================
+     FIREBASE LISTENER
+  ======================= */
+  useEffect(() => {
+    if (!auth.currentUser || !chatId) return;
+
+    const userId = auth.currentUser.uid;
+    // Référence vers les messages de cette conversation spécifique
+    const messagesRef = collection(db, `users/${userId}/chats/${chatId}/messages`);
+    const q = query(messagesRef, orderBy('createdAt', 'asc'));
+
+    // Écoute en temps réel
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const msgs = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                text: data.text,
+                sender: data.sender,
+                createdAt: data.createdAt
+            } as Message;
+        });
+        setMessages(msgs);
+    });
+
+    return () => unsubscribe();
+  }, [chatId]);
 
   /* =======================
      ACTIONS
   ======================= */
-  const sendMessage = () => {
-    if (!inputText.trim()) return;
+  const sendMessage = async () => {
+    if (!inputText.trim() || !chatId) return;
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text: inputText,
-      sender: 'me',
-      time: new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    };
+    const textToSend = inputText;
+    setInputText(''); // Vider le champ immédiatement pour l'UX
 
-    setMessages(prev => [...prev, newMessage]);
-    setInputText('');
+    try {
+        const userId = auth.currentUser!.uid;
+        const now = new Date().toISOString();
+
+        // 1. Ajouter le message dans la sous-collection 'messages'
+        await addDoc(collection(db, `users/${userId}/chats/${chatId}/messages`), {
+            text: textToSend,
+            sender: 'me',
+            createdAt: now
+        });
+
+        // 2. Mettre à jour le dernier message dans la liste des conversations (pour l'aperçu)
+        const chatDocRef = doc(db, `users/${userId}/chats/${chatId}`);
+        await updateDoc(chatDocRef, {
+            lastMessage: textToSend,
+            time: now,
+            unread: 0
+        });
+
+    } catch (error) {
+        console.error("Erreur envoi message:", error);
+    }
   };
 
   /* =======================
@@ -80,6 +109,11 @@ export default function ConversationScreen() {
   ======================= */
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender === 'me';
+    // Formatage de l'heure
+    const timeString = new Date(item.createdAt).toLocaleTimeString([], {
+        hour: '2-digit', 
+        minute: '2-digit'
+    });
 
     return (
       <View
@@ -102,7 +136,7 @@ export default function ConversationScreen() {
             { color: isMe ? 'rgba(255,255,255,0.7)' : '#999' },
           ]}
         >
-          {item.time}
+          {timeString}
         </Text>
       </View>
     );
@@ -122,7 +156,7 @@ export default function ConversationScreen() {
         <View style={styles.headerInfo}>
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarText}>
-              {contactName.charAt(0).toUpperCase()}
+              {contactName.toString().charAt(0).toUpperCase()}
             </Text>
           </View>
 
@@ -169,14 +203,13 @@ export default function ConversationScreen() {
 }
 
 /* =======================
-   STYLES
+   STYLES (Inchangés)
 ======================= */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -188,17 +221,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-
-  backButton: {
-    marginRight: 15,
-  },
-
+  backButton: { marginRight: 15 },
   headerInfo: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
   },
-
   avatarPlaceholder: {
     width: 40,
     height: 40,
@@ -208,41 +236,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
-
   avatarText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 18,
   },
-
   headerTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
   },
-
   status: {
     fontSize: 12,
     color: Colors.primary,
   },
-
   listContent: {
     padding: 20,
   },
-
   messageBubble: {
     maxWidth: '80%',
     padding: 12,
     borderRadius: 20,
     marginBottom: 10,
   },
-
   myMessage: {
     alignSelf: 'flex-end',
     backgroundColor: Colors.primary,
     borderBottomRightRadius: 5,
   },
-
   otherMessage: {
     alignSelf: 'flex-start',
     backgroundColor: 'white',
@@ -250,25 +271,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee',
   },
-
-  messageText: {
-    fontSize: 15,
-  },
-
-  myMessageText: {
-    color: 'white',
-  },
-
-  otherMessageText: {
-    color: '#333',
-  },
-
+  messageText: { fontSize: 15 },
+  myMessageText: { color: 'white' },
+  otherMessageText: { color: '#333' },
   timeText: {
     fontSize: 10,
     marginTop: 5,
     alignSelf: 'flex-end',
   },
-
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -278,11 +288,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
-
-  attachButton: {
-    padding: 10,
-  },
-
+  attachButton: { padding: 10 },
   input: {
     flex: 1,
     backgroundColor: '#f1f2f6',
@@ -292,7 +298,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     maxHeight: 100,
   },
-
   sendButton: {
     backgroundColor: Colors.primary,
     width: 45,
