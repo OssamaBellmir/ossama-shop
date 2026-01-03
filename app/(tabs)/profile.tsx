@@ -73,7 +73,7 @@ export default function ProfileScreen() {
         <MenuItem 
             icon="person-outline" 
             label="Your profile" 
-            onPress={() => alert('Aller vers Edit Profile')} 
+            onPress={() => router.push('/edit-profile' as any)} 
         />
         <MenuItem 
             icon="card-outline" 
@@ -83,7 +83,7 @@ export default function ProfileScreen() {
         <MenuItem 
             icon="receipt-outline" 
             label="My Orders" 
-            onPress={() => alert('Aller vers Commandes')} 
+            onPress={() => router.push('/my-orders' as any)}
         />
         <MenuItem 
             icon="settings-outline" 
