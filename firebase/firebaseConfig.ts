@@ -1,7 +1,5 @@
 import { initializeApp } from 'firebase/app';
-// On importe initializeAuth et la persistance React Native au lieu de getAuth simple
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getReactNativePersistence, initializeAuth } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -19,12 +17,11 @@ const firebaseConfig = {
 // Init app
 const app = initializeApp(firebaseConfig);
 
-// ✅ AUTH AVEC PERSISTANCE (L'utilisateur reste connecté)
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+// ✅ AUTH SIMPLE (STABLE)
+const auth = getAuth(app);
 
 const db = getFirestore(app);
 const storage = getStorage(app);
 
 export { auth, db, storage };
+
