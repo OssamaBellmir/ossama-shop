@@ -1,0 +1,1 @@
+firebase functions:config:set sendgrid.key="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" sendgrid.from_email="bellmirossama@gmail.com"

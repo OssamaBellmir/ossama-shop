@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1030871308790",
+    "project_id": "ecomerce-2e14e",
+    "storage_bucket": "ecomerce-2e14e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030871308790:android:9c359c7ef50554661ecfd7",
+        "android_client_info": {
+          "package_name": "com.ossama.shop"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1030871308790-elmle743gjosb0lq114q33ogspqfrsm0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXOLE4gQahN2InxizT-PrIptwLXZRJEQw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1030871308790-elmle743gjosb0lq114q33ogspqfrsm0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
